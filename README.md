@@ -2,16 +2,24 @@
 
 Learn ten-finger touch typing as an ice hockey goalie.
 
-Every shot comes with a sequence of keys. Type it correctly before the puck
-reaches the net and the goalie makes the save (glove, blocker or butterfly pad
-save). If you're too slow, it's a goal: the lamp flashes, the horn sounds,
-and you try the shot again.
+Every shot comes with a sequence of keys. Pick your position:
+
+- **Goalie**: type the sequence before the puck reaches the net and you make the
+  save (glove, blocker or butterfly pad save). Too slow, and it's a goal.
+- **Player**: an aim marker shows where you're shooting. Type the sequence before
+  the goalie slides across to cover it, and you deke the goalie and score. Too
+  slow, and the goalie makes the save.
+
+Either way, a missed shot can be retried straight away.
 
 ## Features
 
+- **Goalie or player**: choose your position on the front page.
+- **Time per key**: *Lots of time ×2*, *Relaxed ×1.5* (default), *Normal ×1* or *Challenge ×0.75*. Each shot also includes 2 seconds to react.
 - **Ten-finger guidance.** The on-screen keyboard is colour-coded by finger. The next key glows, and a pair of hands shows which finger to use, including which pinky holds Shift.
 - **19 training levels** that build up step by step. Finishing a level unlocks the next.
-- **Stars, accuracy and WPM** for every level. Three stars means a shutout (no goals) with 95%+ accuracy.
+- **Stars, accuracy and WPM** for every level. Three stars means a perfect level (no misses) with 95%+ accuracy.
+- **Progress saved in the browser**: stars, best WPM and accuracy per level, plus lifetime totals (keys typed, accuracy, minutes practised). A *Continue* button jumps to the next unfinished level, and *Reset progress* clears everything except your custom levels.
 - **Level editor.** Create your own levels from random keys, a word list or sentences, and choose how many saves are needed and how fast the shots are. Levels can be exported to and imported from JSON to share them.
 - **English and Danish.** Switch language in the top bar. Danish includes translated tips and Danish word lists.
 - **US and Danish keyboard layouts**, so the finger guidance matches the physical keyboard (Æ Ø Å on the Danish layout).
@@ -89,4 +97,11 @@ Copy the `en` block in [`js/i18n.js`](js/i18n.js), translate the values, and add
 | `js/i18n.js` | UI texts (English, Danish) |
 | `js/app.js` | Game logic, keyboard layouts, level editor, import/export |
 
-Progress and custom levels are stored in the browser's `localStorage`.
+Everything is stored in the browser's `localStorage` (per browser and device):
+
+| Key | Contents |
+|-----|----------|
+| `sporttyper.progress.v1` | Per level: best stars, WPM, accuracy, number of plays, best stars per position |
+| `sporttyper.totals.v1` | Lifetime keys typed, errors, typing time and shots |
+| `sporttyper.custom.v1` | Your custom levels |
+| `sporttyper.role`, `sporttyper.pace`, `sporttyper.lang`, `sporttyper.layout`, `sporttyper.muted`, `sporttyper.unlockAll`, `sporttyper.lastLevel` | Settings |

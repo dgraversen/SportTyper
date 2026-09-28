@@ -27,6 +27,15 @@
   const K_CUSTOM = 'sporttyper.custom.v1';
   const K_MUTED = 'sporttyper.muted';
   const K_UNLOCK = 'sporttyper.unlockAll';
+  const K_ROLE = 'sporttyper.role';
+  const K_PACE = 'sporttyper.pace';
+  const K_TOTALS = 'sporttyper.totals.v1';
+  const K_LAST = 'sporttyper.lastLevel';
+  const PACES = [2, 1.5, 1, 0.75];
+  let role = store.get(K_ROLE, 'goalie') === 'player' ? 'player' : 'goalie';
+  let pace = PACES.includes(store.get(K_PACE, 1.5)) ? store.get(K_PACE, 1.5) : 1.5;
+  const NEW_TOTALS = () => ({ keys: 0, errors: 0, ms: 0, shots: 0 });
+  let totals = { ...NEW_TOTALS(), ...(store.get(K_TOTALS, {}) || {}) };
 
   // ================================================================
   // Sound (tiny WebAudio synth, no files needed)
@@ -365,10 +374,51 @@
     cg.appendChild(add);
 
     $('#unlockBtn').textContent = t(unlockAll ? 'menu.lock' : 'menu.unlock');
+    renderSettings();
+    renderProgress();
+  }
+
+  function renderSettings() {
+    $$('#rolePick button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.role === role)));
+    $('#paceSel').value = String(pace);
+  }
+
+  // The level to continue with: the first unlocked level without stars
+  function continueLevel() {
+    const i = BUILTIN.findIndex((l, n) => isUnlocked(n) && !(progress[l.id]?.stars));
+    return i >= 0 ? { lvl: BUILTIN[i], n: i + 1 } : null;
+  }
+
+  function renderProgress() {
+    const done = BUILTIN.filter(l => progress[l.id]?.stars);
+    const stars = BUILTIN.reduce((sum, l) => sum + (progress[l.id]?.stars || 0), 0);
+    const bestWpm = Object.values(progress).reduce((m, p) => Math.max(m, p.wpm || 0), 0);
+    const typed = totals.keys + totals.errors;
+    const acc = typed ? Math.round((totals.keys * 100) / typed) : 0;
+    const mins = Math.round(totals.ms / 60000);
+    const cell = (value, label) => `<div><b>${esc(value)}</b><span>${esc(label)}</span></div>`;
+    $('#progStats').innerHTML = [
+      cell(`${stars}/${BUILTIN.length * 3}`, t('prog.stars')),
+      cell(`${done.length}/${BUILTIN.length}`, t('prog.levels')),
+      cell(bestWpm || '–', t('prog.bestWpm')),
+      cell(typed ? `${acc}%` : '–', t('sb.acc')),
+      cell(totals.keys.toLocaleString(lang === 'da' ? 'da-DK' : 'en-US'), t('prog.keys')),
+      cell(mins < 1 && totals.ms ? '<1' : String(mins), t('prog.minutes')),
+    ].join('');
+    const next = continueLevel();
+    const btn = $('#continueBtn');
+    btn.hidden = !next;
+    if (next) {
+      btn.textContent = t(totals.shots ? 'prog.continue' : 'prog.start', { n: next.n, name: next.lvl.name });
+      btn.onclick = () => startLevel(next.lvl);
+    }
+    $('#resetBtn').hidden = !totals.shots && !Object.keys(progress).length;
   }
 
   function levelCard(lvl, num, unlocked) {
-    const stars = progress[lvl.id]?.stars || 0;
+    const rec = progress[lvl.id];
+    const stars = rec?.stars || 0;
+    const best = rec?.plays ? `<span class="best" title="${esc(t('card.best'))}">🏆 ${rec.wpm} ${esc(t('sb.wpm'))} · ${rec.acc}%</span>` : '';
     const card = document.createElement('div');
     card.className = `level-card${unlocked ? '' : ' locked'}${stars ? ' done' : ''}`;
     card.innerHTML = `
@@ -378,6 +428,7 @@
         <span class="sub">${esc(lvl.subtitle || describe(lvl))}</span>
         <span class="keys">${esc(preview(lvl))}</span>
         <span class="stars">${starsHtml(stars)}</span>
+        ${best}
       </button>
       ${unlocked ? '' : `<span class="lock" aria-label="${esc(t('card.locked'))}">🔒</span>`}
       ${lvl.custom ? `<div class="card-tools"><button type="button" data-act="edit" title="${esc(t('card.edit'))}">✎</button><button type="button" data-act="del" title="${esc(t('card.delete'))}">✕</button></div>` : ''}`;
@@ -410,7 +461,7 @@
     blocker: $('#gBlocker'), glove: $('#gGlove'), glovePuck: $('#gGlovePuck'),
     armL: $('#gArmL'), armR: $('#gArmR'),
     puck: $('#puck'), flyLayer: $('#flyLayer'), netLayer: $('#netPuckLayer'),
-    net: $('#net'), lamp: $('#lamp'), crowd: $('#crowd'), shooter: $('#shooter'),
+    net: $('#net'), lamp: $('#lamp'), aim: $('#aim'), crowd: $('#crowd'), shooter: $('#shooter'),
     seq: $('#sequence'), banner: $('#banner'), overlay: $('#overlay'), card: $('#overlayCard'),
     timer: $('#timerFill'),
   };
@@ -466,8 +517,8 @@
     }
     return p;
   }
-  function setGoalieTarget(progress, speed) {
-    const full = G.target ? savePose(G.target) : BASE_POSE;
+  function setGoalieTarget(progress, speed, target = G.target) {
+    const full = target ? savePose(target) : BASE_POSE;
     gTar = {};
     for (const k in BASE_POSE) gTar[k] = lerp(BASE_POSE[k], full[k], progress);
     gSpeed = speed;
@@ -497,6 +548,7 @@
     el.lamp.classList.remove('on');
     el.net.classList.remove('shake');
     el.shooter.classList.remove('swing', 'windup');
+    el.aim.style.display = 'none';
     setGoalieTarget(0, 7);
     setTimer(1);
     G.anim = null;
@@ -533,14 +585,20 @@
   // ================================================================
   // Game
   // ================================================================
+  // As the goalie you type to stop the shot; as a player you type to shoot
+  // before the goalie gets across. "wins" are saves or goals respectively.
   const G = {
     level: null,
-    state: 'idle', // idle | intro | ready | shooting | saving | goal | done | paused
+    role: 'goalie',
+    state: 'idle', // idle | intro | ready | shooting | resolving | lost | done | paused
     seq: '', pos: 0,
-    saves: 0, goals: 0, correct: 0, errors: 0, typingMs: 0,
+    wins: 0, losses: 0, correct: 0, errors: 0, typingMs: 0,
+    shotCorrect: 0, shotErrors: 0,
     fireAt: 0, duration: 0, target: null,
     anim: null, timers: [], overlayPrimary: null,
   };
+  const isPlayer = () => G.role === 'player';
+  const msPerKey = l => (60000 / (l.wpm * 5)) * pace;
 
   function later(fn, ms) { G.timers.push(setTimeout(fn, ms)); }
   function clearTimers() { G.timers.forEach(clearTimeout); G.timers = []; }
@@ -549,7 +607,8 @@
 
   function startLevel(lvl) {
     clearTimers();
-    Object.assign(G, { level: lvl, seq: '', pos: 0, saves: 0, goals: 0, correct: 0, errors: 0, typingMs: 0, target: null });
+    Object.assign(G, { level: lvl, role, seq: '', pos: 0, wins: 0, losses: 0, correct: 0, errors: 0, typingMs: 0, target: null });
+    store.set(K_LAST, lvl.id);
     showScreen('game');
     $('#levelTitle').textContent = lvl.name;
     resetScene();
@@ -567,12 +626,13 @@
     const keysHtml = l.mode === 'keys'
       ? `<div class="intro-keys">${[...l.keys].map(k => `<kbd class="f-${FINGER[keyInfo(k).base] || 'none'}">${esc(k.toUpperCase())}</kbd>`).join('')}</div>`
       : `<div class="intro-sample">${esc(preview(l))}</div>`;
+    const sec = (msPerKey(l) / 1000).toFixed(1);
     showOverlay(`
-      <div class="eyebrow">${esc(num >= 0 ? t('intro.level', { n: num + 1 }) : t('intro.custom'))}</div>
+      <div class="eyebrow">${esc(num >= 0 ? t('intro.level', { n: num + 1 }) : t('intro.custom'))} · ${esc(t(isPlayer() ? 'role.player' : 'role.goalie'))}</div>
       <h2>${esc(l.name)}</h2>
       ${keysHtml}
       ${l.tip ? `<p class="tip">${esc(l.tip)}</p>` : ''}
-      <p class="meta">${t('intro.meta', { shots: l.shots, wpm: l.wpm })}</p>
+      <p class="meta">${t(isPlayer() ? 'intro.metaPlayer' : 'intro.meta', { shots: l.shots, sec })}</p>
       <div class="actions"><button class="btn primary" type="button" data-primary>${esc(t('intro.go'))} <kbd>Enter</kbd></button></div>`,
       () => { hideOverlay(); nextShot(); });
   }
@@ -587,27 +647,37 @@
     clearTimers();
     if (!retry || !G.seq) G.seq = makeSequence(G.level, G.seq);
     G.pos = 0;
+    G.shotCorrect = 0;
+    G.shotErrors = 0;
     G.target = pickTarget();
-    // time to type at the level's speed, plus a moment to react
-    G.duration = 1400 + G.seq.length * 60000 / (G.level.wpm * 5);
+    // time to type every key at the chosen pace, plus a moment to react
+    G.duration = 2000 + G.seq.length * msPerKey(G.level);
     resetScene();
     renderSequence();
     showNextKey(G.seq[0]);
     G.state = 'ready';
-    setBanner(t(retry ? 'ready.retry' : 'ready'), 'ready');
+    if (isPlayer()) {
+      el.aim.style.display = '';
+      el.aim.setAttribute('transform', `translate(${G.target.x.toFixed(1)} ${G.target.y.toFixed(1)})`);
+    }
+    setBanner(t(retry ? 'ready.retry' : isPlayer() ? 'ready.player' : 'ready'), 'ready');
     el.shooter.classList.add('windup');
     later(fire, 1200);
   }
 
+  // Starts the clock. The goalie's puck leaves the stick now; the player's
+  // shot waits on the stick until the sequence is typed.
   function fire() {
     if (G.state !== 'ready') return;
     clearTimers();
     G.state = 'shooting';
     G.fireAt = performance.now();
     hideBanner();
-    el.shooter.classList.remove('windup');
-    el.shooter.classList.add('swing');
-    sound.shot();
+    if (!isPlayer()) {
+      el.shooter.classList.remove('windup');
+      el.shooter.classList.add('swing');
+      sound.shot();
+    }
   }
 
   function renderSequence() {
@@ -626,16 +696,18 @@
     if (ch === G.seq[G.pos]) {
       G.pos++;
       G.correct++;
+      G.shotCorrect++;
       sound.key();
       flashKey(ch, true);
       renderSequence();
       if (G.pos >= G.seq.length) onComplete();
       else {
         showNextKey(G.seq[G.pos]);
-        setGoalieTarget((G.pos / G.seq.length) * 0.6, 6);
+        if (!isPlayer()) setGoalieTarget((G.pos / G.seq.length) * 0.6, 6);
       }
     } else {
       G.errors++;
+      G.shotErrors++;
       sound.miss();
       flashKey(ch, false);
       const cur = el.seq.children[G.pos];
@@ -644,17 +716,51 @@
     updateScoreboard();
   }
 
-  function onComplete() {
-    const now = performance.now();
-    G.state = 'saving';
-    G.typingMs += now - G.fireAt;
-    const from = clamp((now - G.fireAt) / G.duration, 0, 1);
-    showNextKey(null);
-    setGoalieTarget(1, 24);
-    animate(200, k => setPuckT(lerp(from, 1, k * k)), onSaveImpact);
+  function shoot(from, dur, behindGoalie, done) {
+    el.aim.style.display = 'none';
+    if (from === 0) {
+      el.shooter.classList.remove('windup');
+      el.shooter.classList.add('swing');
+      sound.shot();
+    }
+    if (behindGoalie) el.netLayer.appendChild(el.puck);
+    animate(dur, k => setPuckT(lerp(from, 1, k * k)), done);
   }
 
-  function onSaveImpact() {
+  function onComplete() {
+    const now = performance.now();
+    G.state = 'resolving';
+    G.typingMs += now - G.fireAt;
+    recordShot(now - G.fireAt);
+    showNextKey(null);
+    if (isPlayer()) {
+      // beat the goalie: they bite the wrong way and the shot goes in
+      const T = G.target;
+      setGoalieTarget(0.8, 14, { ...T, x: 800 - T.x, side: -T.side });
+      shoot(0, 300, true, () => { goalVisual(); win(); });
+    } else {
+      setGoalieTarget(1, 24);
+      shoot(clamp((now - G.fireAt) / G.duration, 0, 1), 200, false, () => win(saveVisual()));
+    }
+  }
+
+  function onTimeout() {
+    G.state = 'resolving';
+    G.typingMs += G.duration;
+    recordShot(G.duration);
+    showNextKey(null);
+    if (isPlayer()) {
+      setGoalieTarget(1, 24);
+      shoot(0, 320, false, () => { saveVisual(); lose(); });
+    } else {
+      setPuckT(1);
+      setGoalieTarget(0.6, 12); // too late!
+      goalVisual();
+      lose();
+    }
+  }
+
+  function saveVisual() {
     const T = G.target;
     const type = T.high ? (T.side > 0 ? 'glove' : 'blocker') : 'pad';
     sound.save();
@@ -666,23 +772,10 @@
     } else {
       animate(650, k => setPuck(T.x + T.side * 280 * k, T.y + 80 * k - Math.sin(Math.PI * k) * 50, lerp(0.75, 1.4, k), 1 - k));
     }
-    G.saves++;
-    updateScoreboard();
-    setBanner(pick(t('save.' + type)), 'save');
-    el.crowd.classList.remove('cheer'); void el.crowd.getBoundingClientRect(); el.crowd.classList.add('cheer');
-    later(() => {
-      hideBanner();
-      if (G.saves >= G.level.shots) levelComplete(); else nextShot();
-    }, 1300);
+    return type;
   }
 
-  function onGoal() {
-    G.state = 'goal';
-    G.typingMs += G.duration;
-    G.goals++;
-    updateScoreboard();
-    showNextKey(null);
-    setGoalieTarget(0.6, 12); // too late!
+  function goalVisual() {
     const T = G.target;
     el.netLayer.appendChild(el.puck);
     const bx = 400 + (T.x - 400) * 0.83;
@@ -691,15 +784,43 @@
     el.net.classList.remove('shake'); void el.net.getBoundingClientRect(); el.net.classList.add('shake');
     el.lamp.classList.add('on');
     sound.goal();
-    setBanner(t('goal'), 'goal',
-      `<span>${esc(t('goal.text'))}</span><button class="btn primary small" type="button" id="retryBtn">${esc(t('goal.retry'))}</button><span class="muted">${esc(t('goal.orEnter'))}</span>`);
+  }
+
+  function win(saveType) {
+    G.wins++;
+    updateScoreboard();
+    setBanner(pick(t(isPlayer() ? 'player.win' : 'save.' + saveType)), 'save');
+    el.crowd.classList.remove('cheer'); void el.crowd.getBoundingClientRect(); el.crowd.classList.add('cheer');
+    later(() => {
+      hideBanner();
+      if (G.wins >= G.level.shots) levelComplete(); else nextShot();
+    }, 1300);
+  }
+
+  function lose() {
+    G.state = 'lost';
+    G.losses++;
+    updateScoreboard();
+    const title = t(isPlayer() ? 'player.lost' : 'goal');
+    const text = t(isPlayer() ? 'player.lostText' : 'goal.text');
+    setBanner(title, 'goal',
+      `<span>${esc(text)}</span><button class="btn primary small" type="button" id="retryBtn">${esc(t('goal.retry'))}</button><span class="muted">${esc(t('goal.orEnter'))}</span>`);
     $('#retryBtn').onclick = retry;
   }
 
   function retry() {
-    if (G.state !== 'goal') return;
+    if (G.state !== 'lost') return;
     hideBanner();
     nextShot(true);
+  }
+
+  // Lifetime totals, saved after every shot so an unfinished level still counts
+  function recordShot(ms) {
+    totals.keys += G.shotCorrect;
+    totals.errors += G.shotErrors;
+    totals.ms += ms;
+    totals.shots += 1;
+    store.set(K_TOTALS, totals);
   }
 
   function stats() {
@@ -712,10 +833,15 @@
     };
   }
 
+  const winLabel = () => t(isPlayer() ? 'sb.goals' : 'sb.saves');
+  const lossLabel = () => t(isPlayer() ? 'sb.saved' : 'sb.goals');
+
   function updateScoreboard() {
     const s = stats();
-    $('#sbSaves').textContent = `${G.saves}/${G.level ? G.level.shots : 0}`;
-    $('#sbGoals').textContent = G.goals;
+    $('#sbWinLabel').textContent = winLabel();
+    $('#sbLossLabel').textContent = lossLabel();
+    $('#sbWins').textContent = `${G.wins}/${G.level ? G.level.shots : 0}`;
+    $('#sbLosses').textContent = G.losses;
     $('#sbAcc').textContent = `${s.acc}%`;
     $('#sbWpm').textContent = s.wpm;
   }
@@ -725,25 +851,34 @@
     const l = G.level;
     const { acc, wpm } = stats();
     let stars = 1;
-    if (G.goals === 0 && acc >= 95) stars = 3;
-    else if (G.goals <= Math.max(1, Math.floor(l.shots * 0.25)) && acc >= 85) stars = 2;
+    if (G.losses === 0 && acc >= 95) stars = 3;
+    else if (G.losses <= Math.max(1, Math.floor(l.shots * 0.25)) && acc >= 85) stars = 2;
 
     const prev = progress[l.id] || {};
-    progress[l.id] = { stars: Math.max(prev.stars || 0, stars), wpm: Math.max(prev.wpm || 0, wpm), acc: Math.max(prev.acc || 0, acc) };
+    const newBest = stars > (prev.stars || 0) || wpm > (prev.wpm || 0);
+    progress[l.id] = {
+      stars: Math.max(prev.stars || 0, stars),
+      wpm: Math.max(prev.wpm || 0, wpm),
+      acc: Math.max(prev.acc || 0, acc),
+      plays: (prev.plays || 0) + 1,
+      [G.role]: Math.max(prev[G.role] || 0, stars), // best stars per position
+      last: Date.now(),
+    };
     store.set(K_PROGRESS, progress);
     sound.win();
 
     const idx = BUILTIN.indexOf(l);
     const next = idx >= 0 ? BUILTIN[idx + 1] : null;
-    const msg = t('done.' + stars);
+    const msg = t((isPlayer() ? 'doneP.' : 'done.') + stars);
 
     showOverlay(`
       <div class="eyebrow">${esc(t('done.title'))}</div>
       <h2>${esc(l.name)}</h2>
       <div class="big-stars">${starsHtml(stars)}</div>
+      ${newBest && prev.plays ? `<p class="new-best">${esc(t('done.best'))}</p>` : ''}
       <div class="stats">
-        <div><b>${G.saves}</b><span>${esc(t('sb.saves'))}</span></div>
-        <div><b>${G.goals}</b><span>${esc(t('sb.goals'))}</span></div>
+        <div><b>${G.wins}</b><span>${esc(winLabel())}</span></div>
+        <div><b>${G.losses}</b><span>${esc(lossLabel())}</span></div>
         <div><b>${acc}%</b><span>${esc(t('sb.acc'))}</span></div>
         <div><b>${wpm}</b><span>${esc(t('sb.wpm'))}</span></div>
       </div>
@@ -786,9 +921,14 @@
     const dt = Math.min(0.05, (now - lastFrame) / 1000);
     lastFrame = now;
     if (G.state === 'shooting') {
-      const t = (now - G.fireAt) / G.duration;
-      if (t >= 1) { setPuckT(1); setTimer(0); onGoal(); }
-      else { setPuckT(t); setTimer(1 - t); }
+      // rAF timestamps can be a little older than fireAt, so never go below 0
+      const p = Math.max(0, (now - G.fireAt) / G.duration);
+      if (p >= 1) { setTimer(0); onTimeout(); }
+      else {
+        setTimer(1 - p);
+        if (isPlayer()) setGoalieTarget(Math.pow(p, 1.4), 5); // goalie slides across
+        else setPuckT(p);
+      }
     }
     if (G.anim) {
       const a = G.anim;
@@ -812,7 +952,7 @@
       else if (G.state === 'done' && e.key.toLowerCase() === 'r') { e.preventDefault(); startLevel(G.level); }
       return;
     }
-    if (G.state === 'goal') {
+    if (G.state === 'lost') {
       if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); retry(); }
       return;
     }
@@ -950,6 +1090,18 @@
   $('#backBtn').onclick = backToMenu;
   $('#brandLink').onclick = e => { e.preventDefault(); backToMenu(); };
   $('#unlockBtn').onclick = () => { unlockAll = !unlockAll; store.set(K_UNLOCK, unlockAll); renderMenu(); };
+  $$('#rolePick button').forEach(b => {
+    b.onclick = () => { role = b.dataset.role; store.set(K_ROLE, role); renderSettings(); };
+  });
+  $('#paceSel').onchange = e => { pace = Number(e.target.value); store.set(K_PACE, pace); e.target.blur(); };
+  $('#resetBtn').onclick = () => {
+    if (!confirm(t('prog.confirmReset'))) return;
+    progress = {};
+    totals = NEW_TOTALS();
+    store.set(K_PROGRESS, progress);
+    store.set(K_TOTALS, totals);
+    renderMenu();
+  };
 
   // Changing language or keyboard mid-level returns to the menu, since the level content changes
   function refreshLocale() {

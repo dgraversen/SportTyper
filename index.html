@@ -38,6 +38,44 @@
         <p class="device-note" data-i18n="device"></p>
       </div>
 
+      <div class="settings">
+        <div class="setting">
+          <span class="setting-label" data-i18n="set.role"></span>
+          <div class="role-pick" id="rolePick">
+            <button type="button" data-role="goalie" aria-pressed="true">
+              <span class="role-icon" aria-hidden="true">🥅</span>
+              <b data-i18n="role.goalie"></b>
+              <small data-i18n="role.goalieDesc"></small>
+            </button>
+            <button type="button" data-role="player" aria-pressed="false">
+              <span class="role-icon" aria-hidden="true">🏒</span>
+              <b data-i18n="role.player"></b>
+              <small data-i18n="role.playerDesc"></small>
+            </button>
+          </div>
+        </div>
+        <div class="setting">
+          <label class="setting-label" for="paceSel" data-i18n="set.pace"></label>
+          <select id="paceSel" class="select">
+            <option value="2" data-i18n="pace.2"></option>
+            <option value="1.5" data-i18n="pace.1.5"></option>
+            <option value="1" data-i18n="pace.1"></option>
+            <option value="0.75" data-i18n="pace.0.75"></option>
+          </select>
+          <small class="setting-help" data-i18n="set.paceHelp"></small>
+        </div>
+      </div>
+
+      <div class="progress-panel">
+        <div class="section-head">
+          <h2 data-i18n="prog.title"></h2>
+          <button id="resetBtn" class="link-btn" type="button" data-i18n="prog.reset"></button>
+        </div>
+        <div class="prog-stats" id="progStats"></div>
+        <button id="continueBtn" class="btn primary" type="button"></button>
+        <p class="setting-help" data-i18n="prog.saved"></p>
+      </div>
+
       <div class="section-head">
         <h2 data-i18n="menu.training"></h2>
         <button id="unlockBtn" class="link-btn" type="button"></button>
@@ -61,8 +99,8 @@
         <button id="backBtn" class="btn ghost small" type="button" data-i18n="game.back"></button>
         <div class="level-title" id="levelTitle"></div>
         <div class="scoreboard">
-          <div><span data-i18n="sb.saves"></span><b id="sbSaves">0/0</b></div>
-          <div><span data-i18n="sb.goals"></span><b id="sbGoals">0</b></div>
+          <div><span id="sbWinLabel"></span><b id="sbWins">0/0</b></div>
+          <div><span id="sbLossLabel"></span><b id="sbLosses">0</b></div>
           <div><span data-i18n="sb.acc"></span><b id="sbAcc">100%</b></div>
           <div><span data-i18n="sb.wpm"></span><b id="sbWpm">0</b></div>
         </div>
@@ -172,6 +210,16 @@
           </g>
 
           <!-- flying puck -->
+          <!-- player's aiming spot -->
+          <g id="aim" style="display:none">
+            <g class="aim-spin">
+              <circle r="17" fill="#facc15" fill-opacity=".18" stroke="#0b1120" stroke-width="7"/>
+              <path d="M-27 0H-10M10 0H27M0 -27V-10M0 10V27" stroke="#0b1120" stroke-width="7" stroke-linecap="round"/>
+              <circle r="17" fill="none" stroke="#facc15" stroke-width="3.5" stroke-dasharray="7 5"/>
+              <path d="M-27 0H-10M10 0H27M0 -27V-10M0 10V27" stroke="#facc15" stroke-width="3.5" stroke-linecap="round"/>
+            </g>
+          </g>
+
           <g id="flyLayer">
             <g id="puck">
               <rect x="-12" y="-2" width="24" height="5" fill="#0b0b0b"/>
