@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SportTyper – Goalie Typing Trainer</title>
+  <meta name="description" content="Learn ten-finger touch typing by making saves as an ice hockey goalie.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏒</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#" id="brandLink"><span class="brand-puck" aria-hidden="true"></span><span>Sport<b>Typer</b></span></a>
+    <div class="topbar-actions">
+      <select id="langSel" class="select" aria-label="Language / Sprog">
+        <option value="en">English</option>
+        <option value="da">Dansk</option>
+      </select>
+      <select id="layoutSel" class="select" aria-label="Keyboard layout">
+        <option value="us" data-i18n="layout.us">US keyboard</option>
+        <option value="dk" data-i18n="layout.dk">Danish keyboard</option>
+      </select>
+      <button id="muteBtn" class="icon-btn" type="button" data-i18n-title="sound" data-i18n-aria="sound">🔊</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- ============ LEVEL SELECT ============ -->
+    <section id="menu" class="screen">
+      <div class="hero">
+        <h1><span data-i18n="hero.title1">Stop the shot.</span><br><span class="accent" data-i18n="hero.title2">Learn to type with ten fingers.</span></h1>
+        <p data-i18n="hero.text"></p>
+        <ol class="steps">
+          <li><b data-i18n="step1.title"></b><span id="step1Text"></span></li>
+          <li><b data-i18n="step2.title"></b><span data-i18n="step2.text"></span></li>
+          <li><b data-i18n="step3.title"></b><span data-i18n="step3.text"></span></li>
+        </ol>
+        <p class="device-note" data-i18n="device"></p>
+      </div>
+
+      <div class="section-head">
+        <h2 data-i18n="menu.training"></h2>
+        <button id="unlockBtn" class="link-btn" type="button"></button>
+      </div>
+      <div id="levelGrid" class="level-grid"></div>
+
+      <div class="section-head">
+        <h2 data-i18n="menu.yours"></h2>
+        <div class="section-actions">
+          <button id="importBtn" class="btn ghost small" type="button" data-i18n="menu.import"></button>
+          <button id="exportBtn" class="btn ghost small" type="button" data-i18n="menu.export"></button>
+          <input type="file" id="importFile" accept="application/json,.json" hidden>
+        </div>
+      </div>
+      <div id="customGrid" class="level-grid"></div>
+    </section>
+
+    <!-- ============ GAME ============ -->
+    <section id="game" class="screen" hidden>
+      <div class="game-bar">
+        <button id="backBtn" class="btn ghost small" type="button" data-i18n="game.back"></button>
+        <div class="level-title" id="levelTitle"></div>
+        <div class="scoreboard">
+          <div><span data-i18n="sb.saves"></span><b id="sbSaves">0/0</b></div>
+          <div><span data-i18n="sb.goals"></span><b id="sbGoals">0</b></div>
+          <div><span data-i18n="sb.acc"></span><b id="sbAcc">100%</b></div>
+          <div><span data-i18n="sb.wpm"></span><b id="sbWpm">0</b></div>
+        </div>
+      </div>
+
+      <div class="rink-wrap" id="rinkWrap">
+        <svg id="scene" viewBox="0 0 800 420" aria-hidden="true">
+          <defs>
+            <linearGradient id="gIce" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#d3e6f3"/>
+              <stop offset="1" stop-color="#f7fbff"/>
+            </linearGradient>
+            <linearGradient id="gCrowd" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#070c1c"/>
+              <stop offset="1" stop-color="#1a2547"/>
+            </linearGradient>
+            <pattern id="mesh" width="9" height="9" patternUnits="userSpaceOnUse">
+              <path d="M0 0L9 9M9 0L0 9" stroke="#ffffff" stroke-opacity=".75" stroke-width="1"/>
+            </pattern>
+            <radialGradient id="gLamp">
+              <stop offset="0" stop-color="#ff6b6b"/>
+              <stop offset="1" stop-color="#ff0000" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+
+          <!-- arena -->
+          <rect width="800" height="122" fill="url(#gCrowd)"/>
+          <g id="crowd"></g>
+          <rect y="36" width="800" height="86" fill="#bfe3ff" opacity=".07"/>
+          <g id="lamp">
+            <circle class="lamp-glow" cx="400" cy="110" r="46" fill="url(#gLamp)"/>
+            <rect class="lamp-bulb" x="387" y="103" width="26" height="13" rx="4"/>
+          </g>
+          <rect y="116" width="800" height="6" fill="#1d4ed8"/>
+          <rect y="122" width="800" height="34" fill="#f8fafc"/>
+          <text class="ad" x="130" y="145" data-i18n="ad.left">TEN FINGERS</text>
+          <text class="ad" x="670" y="145" data-i18n="ad.right">HOME ROW</text>
+          <rect y="152" width="800" height="6" fill="#facc15"/>
+          <rect y="158" width="800" height="262" fill="url(#gIce)"/>
+
+          <!-- ice markings -->
+          <line x1="0" y1="332" x2="800" y2="332" stroke="#e11d48" stroke-width="3" opacity=".75"/>
+          <ellipse cx="110" cy="368" rx="100" ry="20" fill="none" stroke="#e11d48" stroke-width="3" opacity=".5"/>
+          <ellipse cx="690" cy="368" rx="100" ry="20" fill="none" stroke="#e11d48" stroke-width="3" opacity=".5"/>
+          <ellipse cx="110" cy="368" rx="9" ry="3" fill="#e11d48" opacity=".6"/>
+          <ellipse cx="690" cy="368" rx="9" ry="3" fill="#e11d48" opacity=".6"/>
+          <rect x="0" y="398" width="800" height="12" fill="#2563eb" opacity=".7"/>
+          <path d="M262 332 A138 38 0 0 0 538 332 Z" fill="#60a5fa" fill-opacity=".5" stroke="#e11d48" stroke-width="2.5"/>
+          <ellipse cx="400" cy="334" rx="128" ry="5" fill="#0f172a" opacity=".12"/>
+
+          <!-- net -->
+          <g id="net">
+            <polygon points="300,216 500,216 504,318 296,318" fill="#ffffff" fill-opacity=".28"/>
+            <polygon points="300,216 500,216 504,318 296,318" fill="url(#mesh)"/>
+            <polygon points="280,200 300,216 296,318 280,332" fill="url(#mesh)"/>
+            <polygon points="520,200 500,216 504,318 520,332" fill="url(#mesh)"/>
+            <polygon points="280,200 520,200 500,216 300,216" fill="url(#mesh)"/>
+            <path d="M280 332 L296 318 L504 318 L520 332" stroke="#e2e8f0" stroke-width="3" fill="none"/>
+            <g id="netPuckLayer"></g>
+            <path d="M280 333 V200 H520 V333" stroke="#dc2626" stroke-width="9" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+          </g>
+
+          <!-- goalie -->
+          <g id="goalie">
+            <ellipse cx="400" cy="338" rx="74" ry="7" fill="#0f172a" opacity=".18"/>
+            <g id="gPadL">
+              <rect x="346" y="262" width="40" height="74" rx="11" fill="#f8fafc" stroke="#1e3a8a" stroke-width="2.5"/>
+              <rect x="347" y="284" width="38" height="7" fill="#2563eb"/>
+              <rect x="347" y="308" width="38" height="7" fill="#2563eb"/>
+              <path d="M353 272 H379" stroke="#cbd5e1" stroke-width="2"/>
+            </g>
+            <g id="gPadR">
+              <rect x="414" y="262" width="40" height="74" rx="11" fill="#f8fafc" stroke="#1e3a8a" stroke-width="2.5"/>
+              <rect x="415" y="284" width="38" height="7" fill="#2563eb"/>
+              <rect x="415" y="308" width="38" height="7" fill="#2563eb"/>
+              <path d="M421 272 H447" stroke="#cbd5e1" stroke-width="2"/>
+            </g>
+            <g id="gUpper">
+              <rect x="352" y="228" width="96" height="44" rx="12" fill="#1e3a8a"/>
+              <path d="M336 240 L340 186 Q400 166 460 186 L464 240 Q400 250 336 240 Z" fill="#2563eb" stroke="#1e3a8a" stroke-width="2"/>
+              <path d="M337.5 222 Q400 231 462.5 222 L463 230 Q400 239 337 230 Z" fill="#f8fafc"/>
+              <circle cx="400" cy="204" r="13" fill="#facc15" stroke="#1e3a8a" stroke-width="2"/>
+              <ellipse cx="400" cy="205" rx="7" ry="3.5" fill="#0f172a"/>
+              <circle cx="400" cy="158" r="23" fill="#f8fafc" stroke="#1e3a8a" stroke-width="2.5"/>
+              <path d="M380 147 Q400 128 420 147" stroke="#2563eb" stroke-width="5" fill="none" stroke-linecap="round"/>
+              <ellipse cx="400" cy="163" rx="13" ry="13" fill="#1e293b"/>
+              <circle cx="395" cy="160" r="2" fill="#fff"/>
+              <circle cx="405" cy="160" r="2" fill="#fff"/>
+              <path d="M387 157 H413 M387 165 H413 M394 150 V176 M400 150 V177 M406 150 V176" stroke="#94a3b8" stroke-width="1.4"/>
+            </g>
+            <line id="gArmL" x1="346" y1="192" x2="340" y2="232" stroke="#2563eb" stroke-width="17" stroke-linecap="round"/>
+            <line id="gArmR" x1="454" y1="192" x2="467" y2="228" stroke="#2563eb" stroke-width="17" stroke-linecap="round"/>
+            <g id="gBlocker">
+              <path d="M334 250 L356 318" stroke="#78350f" stroke-width="6" stroke-linecap="round"/>
+              <path d="M354 311 L360 330" stroke="#1f2937" stroke-width="10"/>
+              <rect x="356" y="326" width="62" height="9" rx="3" fill="#1f2937"/>
+              <rect x="316" y="214" width="30" height="44" rx="6" fill="#f8fafc" stroke="#1e3a8a" stroke-width="2.5"/>
+              <rect x="317" y="227" width="28" height="6" fill="#2563eb"/>
+            </g>
+            <g id="gGlove">
+              <path d="M458 212 Q472 196 490 206 Q498 222 488 240 Q470 250 460 238 Z" fill="#f8fafc" stroke="#1e3a8a" stroke-width="2.5"/>
+              <path d="M466 219 Q476 212 485 221" stroke="#2563eb" stroke-width="4" fill="none" stroke-linecap="round"/>
+              <g id="gGlovePuck" style="display:none">
+                <ellipse cx="476" cy="229" rx="9" ry="4" fill="#111"/>
+              </g>
+            </g>
+          </g>
+
+          <!-- flying puck -->
+          <g id="flyLayer">
+            <g id="puck">
+              <rect x="-12" y="-2" width="24" height="5" fill="#0b0b0b"/>
+              <ellipse cx="0" cy="3" rx="12" ry="5" fill="#0b0b0b"/>
+              <ellipse cx="0" cy="-2" rx="12" ry="5" fill="#333"/>
+            </g>
+          </g>
+
+          <!-- shooter's stick (first person) -->
+          <g id="shooter">
+            <path d="M880 480 L470 404" stroke="#b45309" stroke-width="13" stroke-linecap="round"/>
+            <path d="M600 428 L560 421" stroke="#f8fafc" stroke-width="13"/>
+            <path d="M474 398 L412 401 Q398 403 400 413 L478 411 Z" fill="#111827"/>
+          </g>
+        </svg>
+
+        <div class="jumbotron"><div id="sequence" class="sequence"></div></div>
+        <div id="banner" class="banner" hidden></div>
+      </div>
+
+      <div class="timer"><div id="timerFill"></div></div>
+
+      <div class="keyboard" id="keyboard"></div>
+      <div class="hands">
+        <div class="hand left" id="handL"></div>
+        <div class="hint-box">
+          <div class="hint" id="hint"></div>
+          <div class="caps-warn" id="capsWarn" data-i18n="caps" hidden></div>
+        </div>
+        <div class="hand right" id="handR"></div>
+      </div>
+
+      <div id="overlay" class="overlay" hidden><div class="card" id="overlayCard"></div></div>
+    </section>
+  </main>
+
+  <!-- ============ LEVEL EDITOR ============ -->
+  <dialog id="editor" class="editor">
+    <form id="editorForm" novalidate>
+      <h2 id="editorTitle"></h2>
+
+      <label class="field"><span data-i18n="ed.name"></span>
+        <input name="name" maxlength="40" data-i18n-ph="ed.namePh" autocomplete="off">
+      </label>
+
+      <fieldset class="field">
+        <legend data-i18n="ed.mode"></legend>
+        <div class="seg">
+          <label><input type="radio" name="mode" value="keys" checked><span data-i18n="ed.modeKeys"></span></label>
+          <label><input type="radio" name="mode" value="words"><span data-i18n="ed.modeWords"></span></label>
+          <label><input type="radio" name="mode" value="lines"><span data-i18n="ed.modeLines"></span></label>
+        </div>
+      </fieldset>
+
+      <label class="field" data-for="keys"><span data-i18n="ed.keys"></span>
+        <input name="keys" maxlength="60" placeholder="asdfjkl" autocomplete="off" spellcheck="false">
+        <small data-i18n-html="ed.keysHelp"></small>
+      </label>
+      <label class="field" data-for="words"><span data-i18n="ed.words"></span>
+        <textarea name="words" rows="4" data-i18n-ph="ed.wordsPh" spellcheck="false"></textarea>
+        <small data-i18n="ed.wordsHelp"></small>
+      </label>
+      <label class="field" data-for="lines"><span data-i18n="ed.lines"></span>
+        <textarea name="lines" rows="4" data-i18n-ph="ed.linesPh" spellcheck="false"></textarea>
+        <small data-i18n="ed.linesHelp"></small>
+      </label>
+
+      <div class="field-row">
+        <label class="field" data-for="keys words"><span id="groupsLabel"></span>
+          <input type="number" name="groups" min="1" max="5" value="1">
+        </label>
+        <label class="field"><span data-i18n="ed.shots"></span>
+          <input type="number" name="shots" min="1" max="50" value="10">
+        </label>
+        <label class="field"><span data-i18n="ed.wpm"></span>
+          <input type="number" name="wpm" min="3" max="150" value="12">
+        </label>
+      </div>
+
+      <label class="field"><span><span data-i18n="ed.tip"></span> <em data-i18n="ed.optional"></em></span>
+        <input name="tip" maxlength="200" data-i18n-ph="ed.tipPh" autocomplete="off">
+      </label>
+
+      <p class="preview"><span data-i18n="ed.example"></span> <code id="editorPreview">—</code></p>
+      <p class="form-error" id="editorError" role="alert"></p>
+
+      <div class="actions">
+        <button type="button" class="btn ghost" id="editorCancel" data-i18n="ed.cancel"></button>
+        <button type="button" class="btn" id="editorSave" data-i18n="ed.save"></button>
+        <button type="submit" class="btn primary" data-i18n="ed.savePlay"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="js/i18n.js"></script>
+  <script src="js/levels.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
